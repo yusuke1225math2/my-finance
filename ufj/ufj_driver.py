@@ -1,6 +1,6 @@
 """ufj directにログインして過去30日のcsvをダウンロード"""
 import json
-from logging import config, getLogger
+from logging import getLogger
 from pathlib import Path
 from time import sleep
 
@@ -16,9 +16,6 @@ from config.selenium_conf import selenium_options
 with open(Path(__file__).parent / '../credentials/credentials.json', 'r', encoding='utf-8') as f_c:
     credentials = json.load(f_c)
 
-with open(Path(__file__).parent / '../config/log_conf.json', 'r', encoding='utf-8') as f:
-    log_conf = json.load(f)
-config.dictConfig(log_conf)
 logger = getLogger(__name__)
 
 
