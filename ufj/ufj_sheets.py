@@ -1,3 +1,4 @@
+"""スプレッドシート更新にまつわる操作"""
 import csv
 import shutil
 from pathlib import Path
@@ -11,9 +12,9 @@ from credentials.credentials import SPREADSHEET_KEY, SHEET_UFJ_CSV
 
 logger = getLogger(__name__)
 
-scope = 'https://spreadsheets.google.com/feeds'
+SCOPE = 'https://spreadsheets.google.com/feeds'
 credentials_file_path = Path(__file__).parent.parent / 'credentials/client_secret.json'
-credentials = ServiceAccountCredentials.from_json_keyfile_name(credentials_file_path, scope)
+credentials = ServiceAccountCredentials.from_json_keyfile_name(credentials_file_path, SCOPE)
 
 gc = gspread.authorize(credentials)
 workbook = gc.open_by_key(SPREADSHEET_KEY)
@@ -39,6 +40,7 @@ def _load_df_from_sheet() -> pd.DataFrame:
 
 
 def update_sheet_with_no_duplicates():
+    """重複行が削除されたデータでスプレッドシートを更新"""
     try:
         csv_dir = Path(__file__).parent.parent / 'downloads'
         csv_path = list(csv_dir.glob('*.csv'))[0]
@@ -56,12 +58,14 @@ def update_sheet_with_no_duplicates():
 
         # dataframeを一時csv化してシート上書き
         final_df = unique_df.drop('key', axis=1).sort_values('日付', ascending=True)
-        tmp_csv_name = 'tmp_ufj.csv'
+        tmp_csv_name = 'local_origin.csv'
         final_df.to_csv(tmp_csv_name, index=False, encoding='utf-8')
         _overwrite_sheet_by_csv(tmp_csv_name)
-        Path(tmp_csv_name).unlink()
+        # Path(tmp_csv_name).unlink()
 
         # 処理が終わったcsvをuploadedに移動
         shutil.move(csv_path, Path(__file__).parent.parent / 'downloads/uploaded')
+    except IndexError:
+        logger.exception('downloadsフォルダにcsvがありませんでした')
     except Exception:
         logger.exception('シートの更新中にエラーが発生しました')
