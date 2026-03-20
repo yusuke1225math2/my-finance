@@ -1,0 +1,25 @@
+{
+  "name": "my-finance",
+  "version": "1.0.0",
+  "description": "2024-05-30_財源管理の諸々の自動化",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yusuke1225math2/my-finance.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/yusuke1225math2/my-finance/issues"
+  },
+  "homepage": "https://github.com/yusuke1225math2/my-finance#readme",
+  "devDependencies": {
+    "@types/google-apps-script": "^2.0.8",
+    "typescript": "^5.9.3"
+  }
+}

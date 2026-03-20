@@ -1,0 +1,10 @@
+{
+  "name": "amazon-prime-mastercard-gas",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-appsscript.mjs",
+    "push": "npm run build && clasp push",
+    "pull": "clasp pull",
+    "open": "clasp open"
+  }
+}
