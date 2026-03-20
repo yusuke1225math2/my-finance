@@ -165,4 +165,6 @@ credentials/
 downloads/
 *.csv
 *.ipynb
-*.clasp.json
+# *.clasp.json
+
+node_modules/
