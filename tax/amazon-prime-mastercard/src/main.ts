@@ -7,7 +7,7 @@ function onOpen() {
   ui.createMenu('★自動処理メニュー') // メニュー名
       .addItem('個人支出自動挿入', 'updateRawDataSheet') // 項目名と実行する関数名
       .addSeparator()
-      .addItem('Exelエクスポート', 'showExportDialog')
+      .addItem('Excelエクスポート', 'showExportDialog')
       .addSeparator()
       .addItem('リセット', 'clearRawDataExceptA1')
       .addToUi();
