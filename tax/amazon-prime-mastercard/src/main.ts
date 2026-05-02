@@ -64,7 +64,11 @@ function showExportDialog() {
           input { width: 100%; padding: 8px; box-sizing: border-box; }
           .btn-area { margin-top: 20px; text-align: right; }
           button { padding: 10px 20px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; margin-left: 10px; }
+          button:disabled { opacity: 0.6; cursor: not-allowed; }
           .ok { background: #1a73e8; color: white; border: none; }
+          .status { display: none; margin-top: 15px; text-align: center; color: #555; font-size: 13px; }
+          .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #ccc; border-top-color: #1a73e8; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
+          @keyframes spin { to { transform: rotate(360deg); } }
         </style>
       </head>
       <body>
@@ -77,17 +81,37 @@ function showExportDialog() {
           <input type="number" id="month" value="${parseInt(defaultMonth)}">
         </div>
         <div class="btn-area">
-          <button onclick="google.script.host.close()">キャンセル</button>
-          <button class="ok" onclick="runExport()">OK</button>
+          <button id="cancel-btn" onclick="google.script.host.close()">キャンセル</button>
+          <button id="ok-btn" class="ok" onclick="runExport()">OK</button>
+        </div>
+        <div id="status" class="status">
+          <span class="spinner"></span>エクスポート中...
         </div>
         <script>
           function runExport() {
             const y = document.getElementById('year').value;
             let m = document.getElementById('month').value;
             if (m.length === 1) m = '0' + m;
+
+            // ボタンを無効化し、処理中表示に切り替え
+            const okBtn = document.getElementById('ok-btn');
+            const cancelBtn = document.getElementById('cancel-btn');
+            const status = document.getElementById('status');
+            okBtn.disabled = true;
+            okBtn.textContent = '処理中...';
+            cancelBtn.disabled = true;
+            status.style.display = 'block';
+
             // GAS側の関数を呼び出す
             google.script.run
               .withSuccessHandler(() => google.script.host.close())
+              .withFailureHandler((e) => {
+                status.style.display = 'none';
+                okBtn.disabled = false;
+                okBtn.textContent = 'OK';
+                cancelBtn.disabled = false;
+                alert('エラーが発生しました: ' + e.message);
+              })
               .exportRawDataToExcel(y, m);
           }
         </script>
