@@ -10,11 +10,11 @@
 
 | レイヤー | 採用技術 | 理由 |
 |---|---|---|
-| フロントエンド | Next.js 14 (App Router) | Web + PWAでiPhone対応を一本化 |
-| スタイル | Tailwind CSS + shadcn/ui | モバイルファーストのUI構築が速い |
+| フロントエンド | Expo (React Native) | iOS・Android・Webを単一コードベースで対応 |
+| スタイル | NativeWind (Tailwind CSS for RN) | Tailwind構文でネイティブUIを記述できる |
 | DB | Supabase (Free tier) | 認証・REST API・リアルタイム込み、無料 |
 | 言語 | TypeScript | 既存GASコードと統一感 |
-| ホスティング | Vercel (Free tier) | Next.jsとの親和性、自動デプロイ |
+| ビルド・配布 | EAS Build (Expo Application Services) | iOSシミュレータ・実機配布が無料枠で可能 |
 
 ---
 
@@ -24,27 +24,27 @@
 
 ```
 my-finance/
-├── app/                        # ← 新規追加
+├── app/                            # ← 新規追加
 │   ├── src/
-│   │   ├── app/               # Next.js App Router
-│   │   │   ├── (auth)/        # ログイン画面
-│   │   │   ├── (app)/         # メインアプリ
-│   │   │   │   ├── page.tsx   # 入力フォーム（トップ）
-│   │   │   │   └── history/   # 入力履歴一覧
-│   │   │   ├── api/           # API Routes
-│   │   │   └── layout.tsx
+│   │   ├── app/                   # Expo Router（ファイルベースルーティング）
+│   │   │   ├── (auth)/
+│   │   │   │   └── login.tsx      # ログイン画面
+│   │   │   ├── (tabs)/
+│   │   │   │   ├── index.tsx      # 入力フォーム（トップ）
+│   │   │   │   └── history.tsx    # 入力履歴一覧
+│   │   │   └── _layout.tsx
 │   │   ├── components/
 │   │   ├── lib/
-│   │   │   └── supabase.ts    # Supabaseクライアント
+│   │   │   └── supabase.ts        # Supabaseクライアント
 │   │   └── types/
-│   ├── public/
-│   │   └── manifest.json      # PWA設定
-│   ├── package.json
-│   └── next.config.ts
-├── gmail-discord/              # 既存
-├── rakuten/                    # 既存
-├── tax/                        # 既存
-├── ufj/                        # 既存
+│   ├── assets/
+│   ├── app.json                   # Expoアプリ設定
+│   ├── eas.json                   # EASビルド設定
+│   └── package.json
+├── gmail-discord/                  # 既存
+├── rakuten/                        # 既存
+├── tax/                            # 既存
+├── ufj/                            # 既存
 └── ...
 ```
 
@@ -86,7 +86,8 @@ create policy "own data only" on expenses
 - [ ] Supabase Authでログイン（Googleアカウント）
 - [ ] 支出入力フォーム（日付・金額・店名・カテゴリ）
 - [ ] 入力履歴一覧（直近30件）
-- [ ] PWA対応（iPhoneのホーム画面に追加）
+- [ ] iPhoneネイティブアプリとして動作（Expo Go / EAS Build）
+- [ ] Expo Webでブラウザからも入力可能
 
 ### 将来対応（MVP後）
 
@@ -102,21 +103,22 @@ create policy "own data only" on expenses
 | サービス | プラン | 費用 |
 |---|---|---|
 | Supabase | Free | $0 |
-| Vercel | Hobby | $0 |
+| EAS Build | Free (月30ビルドまで) | $0 |
 | 合計 | | **$0/月** |
 
 **注意点:**
-- Supabase無料プランはDB直接接続（psql等）時にIPv4アドオン（$4/月、有料プランのみ）が必要。`supabase-js` SDK経由（HTTPS）で使う限り不要。
+- Supabase無料プランはDB直接接続（psql等）時にIPv4アドオン（$4/月、有料プランのみ）が必要。`@supabase/supabase-js` SDK経由（HTTPS）で使う限り不要。
 - Supabase無料プロジェクトは7日間アクセスなしで一時停止。毎日使う家計アプリなら実質停止しない。
+- App Storeへの公開（TestFlightを含む）はApple Developer Program（$99/年）が必要。個人利用のみならExpo GoまたはEAS内部配布で無料。
 
 ---
 
 ## 実装ステップ
 
-1. `app/` ディレクトリにNext.jsプロジェクト作成
-2. Supabaseプロジェクト作成・スキーマ適用
-3. Supabase Auth（Google OAuth）設定
-4. 入力フォームUI実装
-5. 履歴一覧実装
-6. PWA設定（manifest.json + Service Worker）
-7. Vercelデプロイ
+1. `app/` ディレクトリにExpoプロジェクト作成（`npx create-expo-app`）
+2. Expo Router・NativeWindセットアップ
+3. Supabaseプロジェクト作成・スキーマ適用
+4. Supabase Auth（Google OAuth）+ Expo設定
+5. 入力フォームUI実装
+6. 履歴一覧実装
+7. EAS Buildで実機確認
