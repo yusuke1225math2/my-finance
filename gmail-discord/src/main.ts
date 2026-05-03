@@ -6,7 +6,7 @@ interface Transaction {
 }
 
 const GMAIL_QUERY =
-  'from:(mail@contact.vpass.ne.jp OR statement@vpass.ne.jp) subject:ご利用のお知らせ newer_than:1d';
+  'from:statement@vpass.ne.jp subject:ご利用明細のお知らせ newer_than:1d';
 const PROCESSED_IDS_KEY = 'processedMessageIds';
 const MAX_STORED_IDS = 200;
 
@@ -43,40 +43,25 @@ function checkNewEmails(): void {
   }
 }
 
-function extractField(body: string, fieldName: string): string | null {
-  // Pattern 1: "◇fieldName：value" or "◇fieldName:value" on same line
-  let m = body.match(new RegExp(`◇${fieldName}[：:]\\s*(.+?)(?:\\r?\\n|$)`));
-  if (m) return m[1].trim();
-  // Pattern 2: "◇fieldName\nvalue" on next line
-  m = body.match(new RegExp(`◇${fieldName}\\r?\\n(.+?)(?:\\r?\\n|$)`));
-  if (m) return m[1].trim();
-  return null;
-}
-
 function parseSmfcEmail(body: string): Transaction | null {
-  const date = extractField(body, '利用日');
-  const store = extractField(body, 'ご利用先店名');
-  const category = extractField(body, '利用取引');
-  const amount = extractField(body, '利用金額');
+  // ご利用日時：2026/04/28
+  const dateMatch = body.match(/ご利用日時[：:]\s*(\d{4}\/\d{2}\/\d{2})/);
+  // 店名／支払方法（内容）\t金額円
+  // 例: キャンドゥ新高円寺店／ｉＤ（買物）\t330円
+  const txMatch = body.match(/^(.+?)／.+?（(.+?)）\s+([\d,]+)円/m);
 
-  if (!date || !store || !amount) return null;
+  if (!dateMatch || !txMatch) return null;
 
   return {
-    date,
-    store,
-    category: category ?? '不明',
-    amount,
+    date: dateMatch[1],
+    store: txMatch[1].trim(),
+    category: txMatch[2].trim(),
+    amount: txMatch[3].replace(/,/g, ''),
   };
 }
 
 function sendToDiscord(webhookUrl: string, tx: Transaction): void {
-  const content = [
-    '💳 **クレカ利用速報**',
-    `📅 日付: ${tx.date}`,
-    `🏪 支出場所: ${tx.store}`,
-    `📝 内容: ${tx.category}`,
-    `💰 金額: ${tx.amount}`,
-  ].join('\n');
+  const content = `${tx.date} ${tx.store} ${tx.category} ${tx.amount}`;
 
   UrlFetchApp.fetch(webhookUrl, {
     method: 'post' as GoogleAppsScript.URL_Fetch.HttpMethod,
