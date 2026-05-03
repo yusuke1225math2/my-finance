@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Daily scheduled Lambda function
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - development
+      - staging
+      - production
+    Description: Deployment environment
+
+Resources:
+  DailyScheduledFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./src
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.12
+      Timeout: 30
+      MemorySize: 128 # 低コストのために最小限に設定
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+                - ssm:GetParameters
+                - ssm:GetParametersByPath
+              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/my-private-discord-app/${Environment}/*"
+      Events:
+        DailySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(50 14 * * ? *) # UTC時間で14:50 (JST 23:50)
+            Enabled: true
+            Description: Daily execution at 23:50 JST
+
+Outputs:
+  DailyScheduledFunction:
+    Description: "Daily Scheduled Lambda Function ARN"
+    Value: !GetAtt DailyScheduledFunction.Arn
+  DailyScheduledFunctionRole:
+    Description: "IAM Role created for the function"
+    Value: !GetAtt DailyScheduledFunctionRole.Arn
