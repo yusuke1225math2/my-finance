@@ -168,3 +168,10 @@ downloads/
 # *.clasp.json
 
 node_modules/
+
+# Expo / React Native
+app/.expo/
+app/dist/
+app/.env
+app/android/
+app/ios/
