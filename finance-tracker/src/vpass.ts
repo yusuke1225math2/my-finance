@@ -1,4 +1,4 @@
-const VPASS_GMAIL_QUERY = 'from:statement@vpass.ne.jp subject:ご利用明細のお知らせ newer_than:1d';
+const VPASS_GMAIL_QUERY = 'from:statement@vpass.ne.jp subject:ご利用明細のお知らせ newer_than:7d';
 const PROCESSED_IDS_KEY = 'processedVpassMessageIds';
 const MAX_STORED_IDS = 200;
 
