@@ -168,7 +168,6 @@ downloads/
 # *.clasp.json
 
 node_modules/
-.omc/
 
 # Expo / React Native
 app/.expo/
