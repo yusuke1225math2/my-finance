@@ -1,3 +1,8 @@
+/**
+ * Googleフォームに出費が送信されたときのトリガー関数。
+ * スプレッドシートの新規行から日付・場所・項目・金額を読み取り Discord に通知する。
+ * 列順: A=タイムスタンプ, B=日付, C=場所, D=項目, E=金額
+ */
 function onExpenseFormSubmit(e: GoogleAppsScript.Events.SheetsOnFormSubmit): void {
   const props = PropertiesService.getScriptProperties();
   const webhookUrl = props.getProperty('DISCORD_WEBHOOK_URL');
@@ -27,6 +32,7 @@ function onExpenseFormSubmit(e: GoogleAppsScript.Events.SheetsOnFormSubmit): voi
   postToDiscord(webhookUrl, `${date} ${location} ${item} ${amount}`, threadId);
 }
 
+/** Discord 送信の疎通確認用。固定のテストメッセージを送信する。 */
 function testDiscordMessage(): void {
   const props = PropertiesService.getScriptProperties();
   const webhookUrl = props.getProperty('DISCORD_WEBHOOK_URL');
