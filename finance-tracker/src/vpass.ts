@@ -22,41 +22,49 @@ interface VpassTransaction {
  * Vpassの利用通知メールを検索し、未処理のものをパースして Discord に通知する。
  * 重複送信防止のため処理済みメッセージIDを ScriptProperties に保持する。
  * 時刻フィルタは GmailApp.search が newer_than を正しく解釈しないためコード側で実施。
+ * トリガーの多重起動によるレースコンディションを LockService で防ぐ。
  */
 function checkVpassEmails(): void {
-  const props = PropertiesService.getScriptProperties();
-  const webhookUrl = props.getProperty('DISCORD_WEBHOOK_URL');
-  const threadId = props.getProperty('DISCORD_THREAD_ID') ?? undefined;
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(0)) return;
 
-  if (!webhookUrl) {
-    console.error('DISCORD_WEBHOOK_URL is not set in Script Properties');
-    return;
-  }
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const webhookUrl = props.getProperty('DISCORD_WEBHOOK_URL');
+    const threadId = props.getProperty('DISCORD_THREAD_ID') ?? undefined;
 
-  const processedIds = getProcessedVpassIds();
-  const threads = GmailApp.search(buildVpassQuery());
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  let updated = false;
-
-  for (const thread of threads) {
-    for (const message of thread.getMessages()) {
-      if (message.getDate() < oneDayAgo) continue;
-      const id = message.getId();
-      if (processedIds.has(id)) continue;
-
-      const body = message.getPlainBody();
-      const tx = parseVpassEmail(body);
-      if (tx) {
-        postToDiscord(webhookUrl, `${tx.date} ${tx.store} ${tx.category} ${tx.amount}`, threadId);
-      }
-
-      processedIds.add(id);
-      updated = true;
+    if (!webhookUrl) {
+      console.error('DISCORD_WEBHOOK_URL is not set in Script Properties');
+      return;
     }
-  }
 
-  if (updated) {
-    saveProcessedVpassIds(processedIds);
+    const processedIds = getProcessedVpassIds();
+    const threads = GmailApp.search(buildVpassQuery());
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    let updated = false;
+
+    for (const thread of threads) {
+      for (const message of thread.getMessages()) {
+        if (message.getDate() < oneDayAgo) continue;
+        const id = message.getId();
+        if (processedIds.has(id)) continue;
+
+        const body = message.getPlainBody();
+        const tx = parseVpassEmail(body);
+        if (tx) {
+          postToDiscord(webhookUrl, `${tx.date} ${tx.store} ${tx.category}(自動送信) ${tx.amount}`, threadId);
+        }
+
+        processedIds.add(id);
+        updated = true;
+      }
+    }
+
+    if (updated) {
+      saveProcessedVpassIds(processedIds);
+    }
+  } finally {
+    lock.releaseLock();
   }
 }
 
