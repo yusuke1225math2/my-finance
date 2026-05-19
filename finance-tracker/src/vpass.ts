@@ -52,7 +52,7 @@ function checkVpassEmails(): void {
         if (processedIds.has(id)) continue;
 
         const body = message.getPlainBody();
-        const txs = parseVpassEmails(body);
+        const txs = parseVpassMessage(message.getSubject(), body);
         for (let i = 0; i < txs.length; i++) {
           if (i > 0) Utilities.sleep(MULTI_TX_NOTIFY_INTERVAL_MS);
           const tx = txs[i];
@@ -101,6 +101,19 @@ function parseVpassEmails(body: string): VpassTransaction[] {
     if (tx) results.push(tx);
   }
   return results;
+}
+
+/**
+ * 件名に応じて適切なパース方式を選択する。
+ * 「ご利用明細のお知らせ」は1通に複数件含まれ得るため分割パース、
+ * 「ご利用のお知らせ」は単一明細前提でブロック分割を行わない（本文中の引用やフッターによる重複抽出を防ぐ）。
+ */
+function parseVpassMessage(subject: string, body: string): VpassTransaction[] {
+  if (subject.includes('ご利用明細のお知らせ')) {
+    return parseVpassEmails(body);
+  }
+  const tx = parseVpassEmail(body);
+  return tx ? [tx] : [];
 }
 
 /** ScriptProperties から処理済みメッセージIDのセットを取得する。 */
@@ -176,7 +189,7 @@ function testVpassNotification(): void {
   }
 
   const message = threads[0].getMessages()[0];
-  const txs = parseVpassEmails(message.getPlainBody());
+  const txs = parseVpassMessage(message.getSubject(), message.getPlainBody());
   if (txs.length === 0) {
     console.error('パース失敗');
     return;
