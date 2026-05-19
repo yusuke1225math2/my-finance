@@ -22,10 +22,43 @@ function scratchListRecentVpassIds(): void {
       const notifyLines =
         txs.length === 0
           ? ['(パース失敗)']
-          : txs.map((tx) => `  -> ${tx.date} ${tx.store} ${tx.category} ${tx.amount}`);
+          : txs.map(
+              (tx) => `  -> ${tx.date} ${tx.store} ${tx.category} ${tx.amount} ${tx.currency}`,
+            );
       console.log(`${processed} ${date} ${id}`);
       for (const line of notifyLines) console.log(line);
     }
+  }
+}
+
+/**
+ * 指定したメッセージIDのメール本文（件名・日時・本文）とパース結果をログ出力する。
+ * 下の TARGET_MESSAGE_ID を `scratchListRecentVpassIds` の出力から書き換えて実行する。
+ * パース失敗や通貨形式の調査に使う。
+ */
+function scratchDumpVpassEmailById(): void {
+  const TARGET_MESSAGE_ID = 'ここにmessageIdを貼り付け';
+
+  try {
+    const message = GmailApp.getMessageById(TARGET_MESSAGE_ID);
+    const subject = message.getSubject();
+    const date = Utilities.formatDate(message.getDate(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+    const body = message.getPlainBody();
+    console.log(`---- id=${TARGET_MESSAGE_ID} / date=${date} / subject=${subject} ----`);
+    console.log(body);
+
+    const txs = parseVpassMessage(subject, body);
+    console.log(`---- パース結果 (${txs.length}件) ----`);
+    if (txs.length === 0) {
+      console.log('(パース失敗)');
+      return;
+    }
+    for (const tx of txs) {
+      console.log(JSON.stringify(tx));
+      console.log(`  通知文字列: ${formatVpassDiscordContent(tx)}`);
+    }
+  } catch (e) {
+    console.error(`messageId=${TARGET_MESSAGE_ID} を取得できませんでした: ${e}`);
   }
 }
 

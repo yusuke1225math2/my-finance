@@ -18,6 +18,55 @@ interface VpassTransaction {
   store: string;
   category: string;
   amount: string;
+  currency: string;
+  /** 利用金額欄に通貨コード（JPY/USD等）が明記されていたか。明記されていた場合のみ JPY 換算値を併記する。 */
+  hasCurrencyCode: boolean;
+}
+
+const FRANKFURTER_API = 'https://api.frankfurter.app/latest';
+
+/**
+ * 外貨→JPY の換算レートを取得する。Frankfurter API (ECB 日次レート) を使う。
+ * 対応外通貨や API 障害時は null を返し、呼び出し側で換算スキップを判断する。
+ */
+function getExchangeRateToJpy(fromCurrency: string): number | null {
+  if (fromCurrency === 'JPY') return 1;
+  try {
+    const url = `${FRANKFURTER_API}?from=${encodeURIComponent(fromCurrency)}&to=JPY`;
+    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (response.getResponseCode() !== 200) {
+      console.error(
+        `Exchange rate fetch failed: code=${response.getResponseCode()} body=${response.getContentText()}`,
+      );
+      return null;
+    }
+    const data = JSON.parse(response.getContentText()) as { rates?: { JPY?: number } };
+    const rate = data.rates?.JPY;
+    return typeof rate === 'number' ? rate : null;
+  } catch (e) {
+    console.error(`Exchange rate fetch exception: ${e}`);
+    return null;
+  }
+}
+
+/**
+ * Vpassトランザクションを Discord 通知用文字列にフォーマットする。
+ * - 通貨コード明記なし（「X円」形式）: 4要素「日付 店名 内容 日本円」
+ * - 通貨コード明記あり（「X.XX JPY/USD」等）: 5要素「日付 店名 内容 JPY換算 元価格+通貨記号」
+ * categorySuffix は利用取引名の直後に付与する任意文字列（例: '(自動送信)'）。
+ */
+function formatVpassDiscordContent(tx: VpassTransaction, categorySuffix = ''): string {
+  const header = `${tx.date} ${tx.store} ${tx.category}${categorySuffix}`;
+  if (!tx.hasCurrencyCode) {
+    return `${header} ${tx.amount}`;
+  }
+  const originalWithCode = `${tx.amount}${tx.currency}`;
+  const rate = getExchangeRateToJpy(tx.currency);
+  if (rate == null) {
+    return `${header} (JPY換算失敗) ${originalWithCode}`;
+  }
+  const jpy = Math.round(parseFloat(tx.amount.replace(/,/g, '')) * rate);
+  return `${header} ${jpy} ${originalWithCode}`;
 }
 
 /**
@@ -56,7 +105,7 @@ function checkVpassEmails(): void {
         for (let i = 0; i < txs.length; i++) {
           if (i > 0) Utilities.sleep(MULTI_TX_NOTIFY_INTERVAL_MS);
           const tx = txs[i];
-          postToDiscord(webhookUrl, `${tx.date} ${tx.store} ${tx.category}(自動送信) ${tx.amount}`, threadId);
+          postToDiscord(webhookUrl, formatVpassDiscordContent(tx, '(自動送信)'), threadId);
         }
 
         processedIds.add(id);
@@ -72,20 +121,42 @@ function checkVpassEmails(): void {
   }
 }
 
-/** Vpassメール本文から利用日・利用先・取引種別・金額を抽出する。パース失敗時は null を返す。 */
+/**
+ * Vpassメール本文から利用日・利用先・取引種別・金額・通貨を抽出する。パース失敗時は null を返す。
+ * 金額は「4,547円」形式と「4,547.00 JPY」「10.00 USD」のような通貨コード付き形式の両方を許容する。
+ */
 function parseVpassEmail(body: string): VpassTransaction | null {
   const dateMatch = body.match(/◇利用日[：:]\s*(\d{4}\/\d{2}\/\d{2})/);
   const storeMatch = body.match(/◇利用先[：:]\s*([^／\n]+)/);
   const categoryMatch = body.match(/◇利用取引[：:]\s*(.+)/);
-  const amountMatch = body.match(/◇利用金額[：:]\s*([\d,]+)円/);
 
-  if (!dateMatch || !storeMatch || !categoryMatch || !amountMatch) return null;
+  if (!dateMatch || !storeMatch || !categoryMatch) return null;
+
+  const yenMatch = body.match(/◇利用金額[：:]\s*([\d,]+)円/);
+  const codeMatch = body.match(/◇利用金額[：:]\s*([\d,]+(?:\.\d+)?)\s*([A-Z]{3})\b/);
+
+  let amount: string;
+  let currency: string;
+  let hasCurrencyCode: boolean;
+  if (yenMatch) {
+    amount = yenMatch[1].replace(/,/g, '');
+    currency = 'JPY';
+    hasCurrencyCode = false;
+  } else if (codeMatch) {
+    amount = codeMatch[1];
+    currency = codeMatch[2];
+    hasCurrencyCode = true;
+  } else {
+    return null;
+  }
 
   return {
     date: dateMatch[1],
     store: storeMatch[1].trim(),
     category: categoryMatch[1].trim(),
-    amount: amountMatch[1].replace(/,/g, ''),
+    amount,
+    currency,
+    hasCurrencyCode,
   };
 }
 
@@ -217,7 +288,7 @@ function testVpassNotification(): void {
   for (let i = 0; i < txs.length; i++) {
     if (i > 0) Utilities.sleep(MULTI_TX_NOTIFY_INTERVAL_MS);
     const tx = txs[i];
-    const content = `${tx.date} ${tx.store} ${tx.category} ${tx.amount}`;
+    const content = formatVpassDiscordContent(tx);
     console.log('送信内容:', content);
     postToDiscord(webhookUrl, content, threadId);
   }
