@@ -165,6 +165,25 @@ function diagnoseVpassEmails(): void {
   }
 }
 
+/**
+ * 直近のVpassメールを件名・ID・日時・本文ごとログに出す診断関数。
+ * 同じ取引が複数回通知される原因（別メッセージで重複 / 1通内で重複抽出 等）を実物で確認するために使う。
+ */
+function dumpLatestVpassEmails(): void {
+  const threads = GmailApp.search(buildVpassQuery());
+  console.log(`=== ${threads.length} スレッド ===`);
+  for (const thread of threads) {
+    for (const message of thread.getMessages()) {
+      const id = message.getId();
+      const subject = message.getSubject();
+      const date = message.getDate().toISOString();
+      const body = message.getPlainBody();
+      console.log(`---- id=${id} / date=${date} / subject=${subject} ----`);
+      console.log(body);
+    }
+  }
+}
+
 /** processedIds をリセットする。次回 checkVpassEmails 実行時に過去24時間のメールが再通知される。 */
 function clearProcessedVpassIds(): void {
   PropertiesService.getScriptProperties().deleteProperty(PROCESSED_IDS_KEY);
