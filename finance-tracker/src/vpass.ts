@@ -1,6 +1,8 @@
-const VPASS_GMAIL_QUERY_BASE = 'from:statement@vpass.ne.jp subject:ご利用のお知らせ';
+const VPASS_GMAIL_QUERY_BASE =
+  'from:statement@vpass.ne.jp (subject:"ご利用のお知らせ" OR subject:"ご利用明細のお知らせ")';
 const PROCESSED_IDS_KEY = 'processedVpassMessageIds';
 const MAX_STORED_IDS = 200;
+const MULTI_TX_NOTIFY_INTERVAL_MS = 2000;
 
 /** newer_than は GmailApp で動作しないため after:YYYY/MM/DD で昨日以降に絞ったクエリを生成する。 */
 function buildVpassQuery(): string {
@@ -50,8 +52,10 @@ function checkVpassEmails(): void {
         if (processedIds.has(id)) continue;
 
         const body = message.getPlainBody();
-        const tx = parseVpassEmail(body);
-        if (tx) {
+        const txs = parseVpassEmails(body);
+        for (let i = 0; i < txs.length; i++) {
+          if (i > 0) Utilities.sleep(MULTI_TX_NOTIFY_INTERVAL_MS);
+          const tx = txs[i];
           postToDiscord(webhookUrl, `${tx.date} ${tx.store} ${tx.category}(自動送信) ${tx.amount}`, threadId);
         }
 
@@ -83,6 +87,20 @@ function parseVpassEmail(body: string): VpassTransaction | null {
     category: categoryMatch[1].trim(),
     amount: amountMatch[1].replace(/,/g, ''),
   };
+}
+
+/**
+ * Vpassメール本文に含まれる全ての利用明細を抽出する。
+ * 1通のメールに複数件の速報明細が載るケースに対応するため、◇利用日 をブロック区切りとして分割して各ブロックをパースする。
+ */
+function parseVpassEmails(body: string): VpassTransaction[] {
+  const blocks = body.split(/(?=◇利用日[：:])/);
+  const results: VpassTransaction[] = [];
+  for (const block of blocks) {
+    const tx = parseVpassEmail(block);
+    if (tx) results.push(tx);
+  }
+  return results;
 }
 
 /** ScriptProperties から処理済みメッセージIDのセットを取得する。 */
@@ -158,14 +176,18 @@ function testVpassNotification(): void {
   }
 
   const message = threads[0].getMessages()[0];
-  const tx = parseVpassEmail(message.getPlainBody());
-  if (!tx) {
+  const txs = parseVpassEmails(message.getPlainBody());
+  if (txs.length === 0) {
     console.error('パース失敗');
     return;
   }
 
-  const content = `${tx.date} ${tx.store} ${tx.category} ${tx.amount}`;
-  console.log('送信内容:', content);
-  postToDiscord(webhookUrl, content, threadId);
-  console.log('Discord送信完了');
+  for (let i = 0; i < txs.length; i++) {
+    if (i > 0) Utilities.sleep(MULTI_TX_NOTIFY_INTERVAL_MS);
+    const tx = txs[i];
+    const content = `${tx.date} ${tx.store} ${tx.category} ${tx.amount}`;
+    console.log('送信内容:', content);
+    postToDiscord(webhookUrl, content, threadId);
+  }
+  console.log(`Discord送信完了 (${txs.length}件)`);
 }
