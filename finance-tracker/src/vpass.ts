@@ -121,6 +121,11 @@ function checkVpassEmails(): void {
   }
 }
 
+/** フィールド内の空白(半角/全角/タブ)を _ に置換し、Discordのスペース区切りを壊さない単一トークンにする。 */
+function normalizeVpassField(value: string): string {
+  return value.trim().replace(/\s+/g, '_');
+}
+
 /**
  * Vpassメール本文から利用日・利用先・取引種別・金額・通貨を抽出する。パース失敗時は null を返す。
  * 金額は「4,547円」形式と「4,547.00 JPY」「10.00 USD」のような通貨コード付き形式の両方を許容する。
@@ -152,8 +157,8 @@ function parseVpassEmail(body: string): VpassTransaction | null {
 
   return {
     date: dateMatch[1],
-    store: storeMatch[1].trim(),
-    category: categoryMatch[1].trim(),
+    store: normalizeVpassField(storeMatch[1]),
+    category: normalizeVpassField(categoryMatch[1]),
     amount,
     currency,
     hasCurrencyCode,
@@ -255,10 +260,77 @@ function dumpLatestVpassEmails(): void {
   }
 }
 
+/**
+ * ScriptProperties の TEST_VPASS_MESSAGE_ID で指定したメッセージIDのVpassメールをパースして Discord に投稿する。
+ * dumpLatestVpassEmails で本文とIDを確認し、投稿したいメールのIDをこのプロパティに設定してから実行する。
+ * processedIds は更新しないため、本番トリガーの重複防止には影響しない。
+ */
+function testVpassNotificationById(): void {
+  const props = PropertiesService.getScriptProperties();
+  const webhookUrl = props.getProperty('DISCORD_WEBHOOK_URL');
+  const threadId = props.getProperty('DISCORD_THREAD_ID') ?? undefined;
+  const messageId = props.getProperty('TEST_VPASS_MESSAGE_ID');
+
+  if (!webhookUrl) {
+    console.error('DISCORD_WEBHOOK_URL is not set in Script Properties');
+    return;
+  }
+  if (!messageId) {
+    console.error(
+      'TEST_VPASS_MESSAGE_ID is not set. dumpLatestVpassEmails でIDを確認し、ScriptProperties に設定してください',
+    );
+    return;
+  }
+
+  const message = GmailApp.getMessageById(messageId);
+  if (!message) {
+    console.error(`メッセージが見つかりません: ${messageId}`);
+    return;
+  }
+
+  const txs = parseVpassMessage(message.getSubject(), message.getPlainBody());
+  if (txs.length === 0) {
+    console.error('パース失敗');
+    return;
+  }
+
+  for (let i = 0; i < txs.length; i++) {
+    if (i > 0) Utilities.sleep(MULTI_TX_NOTIFY_INTERVAL_MS);
+    const content = formatVpassDiscordContent(txs[i], '(自動送信)');
+    console.log('送信内容:', content);
+    postToDiscord(webhookUrl, content, threadId);
+  }
+  console.log(`Discord送信完了 (${txs.length}件) / id=${messageId}`);
+}
+
 /** processedIds をリセットする。次回 checkVpassEmails 実行時に過去24時間のメールが再通知される。 */
 function clearProcessedVpassIds(): void {
   PropertiesService.getScriptProperties().deleteProperty(PROCESSED_IDS_KEY);
   console.log('processedIds をクリアしました');
+}
+
+/**
+ * 直近のVpassメールをパースし、Discordへ送る文字列をログ出力するだけの確認用関数。
+ * 実際の送信は行わず processedIds も更新しないため、スペース正規化の結果を安全に目視確認できる。
+ * 区切り崩れ検出のため、店名トークンに _ 以外の区切りが残っていないか・金額が index 3 に来るかも併記する。
+ */
+function dryRunVpassNotification(): void {
+  const threads = GmailApp.search(buildVpassQuery());
+  console.log(`=== ${threads.length} スレッド ===`);
+  for (const thread of threads) {
+    for (const message of thread.getMessages()) {
+      const subject = message.getSubject();
+      const txs = parseVpassMessage(subject, message.getPlainBody());
+      console.log(`---- subject=${subject} / ${txs.length}件 ----`);
+      for (const tx of txs) {
+        const content = formatVpassDiscordContent(tx, '(自動送信)');
+        const tokens = content.split(/\s+/);
+        console.log(`store=${JSON.stringify(tx.store)}`);
+        console.log(`content=${content}`);
+        console.log(`tokens=${JSON.stringify(tokens)} / amount@3=${tokens[3]}`);
+      }
+    }
+  }
 }
 
 /** 最新のVpassメールをパースして Discord に送信する疎通確認用関数。processedIds は更新しない。 */
